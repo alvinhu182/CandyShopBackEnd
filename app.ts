@@ -1,4 +1,5 @@
 import AdminJS from "adminjs";
+//import AdminJS from "adminjs/types/src";
 import AdminJSExpress from '@adminjs/express';
 import express from 'express';
 require('dotenv').config()
@@ -9,7 +10,10 @@ const start = async () => {
     const adminOptions = {
         rootPath: '/admin',
         dashboard: {
-
+            handle: () => {
+                console.log("ta no dashboard")
+            },
+            component: AdminJS.bundle('./components/dashboard')
         },
         branding: {
             logo: 'https://artpoin.com/wp-content/uploads/2020/02/Sem-t%C3%ADtulo-2.png' ,
