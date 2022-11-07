@@ -36,6 +36,6 @@ Category.init({
 },
     {
         sequelize,
-        tableName: 'producties',
-        modelName: 'product'
+        tableName: 'categories',
+        modelName: 'category'
     });

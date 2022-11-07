@@ -47,6 +47,6 @@ Product.init({
 },
     {
         sequelize,
-        tableName: 'categories',
-        modelName: 'Product'
+        tableName: 'producties',
+        modelName: 'product'
     });
