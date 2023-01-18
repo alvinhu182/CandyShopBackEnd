@@ -1,175 +1,169 @@
 import AdminJS from 'adminjs';
 import AdminJSExpress from '@adminjs/express';
-import session from 'express-session';
+import AdminSequelize from '@adminjs/sequelize'
+import AdminMongoose from '@adminjs/mongoose';
 import express from 'express';
-import sequelize from './db';
-import * as AdminJSSequelize from '@adminjs/sequelize';
-import { Category } from './model/category.entity';
-import { Product } from './model/product.entity';
+
+// Models
+import { Category} from './model/category.entity'
 import { User } from './model/user.entity';
-import bcrypt from "bcrypt";
-import { auth } from './routes/auth';
+import { Document } from './model/document.entity';
+import { Product } from './model/product.entity';
+import { Role } from './model/role.entity';
+
+// Controllers
+import UserController from './controllers/UserController';
+
+// Routes
+import document from './routes/document';
+import auth from './routes/auth';
+
+import session from 'express-session';
+import cors from 'cors';
+
 import hbs from 'hbs';
-
-
+import { dashboard } from './routes/dashboard';
 const path = require('node:path');
-const mysqlStore = require('express-mysql-session')(session);
+
 require('dotenv').config()
-const bodyParser = require('body-parser');
-const PORT = process.env.PORT_HOST;
+
+const bcrypt = require("bcryptjs");
+
+const mysqlStore = require('express-mysql-session')(session);
+
+const PORT = 3001
+
+const sessionStore = new mysqlStore({
+    connectionLimit: 10,
+    password: process.env.SQL_DB_PASS,
+    user: process.env.SQL_DB_USER,
+    database: process.env.SQL_DB_NAME,
+    host: process.env.SQL_DB_HOST,
+    port: process.env.SQL_DB_PORT,
+    createDatabaseTable: true
+});
+
+const ROOT_DIR = __dirname
+
 AdminJS.registerAdapter({
-  Resource: AdminJSSequelize.Resource,
-  Database: AdminJSSequelize.Database
+    Resource: AdminSequelize.Resource,
+    Database: AdminSequelize.Database
+});
+
+AdminJS.registerAdapter({
+    Resource: AdminMongoose.Resource,
+    Database: AdminMongoose.Database
 })
 
-const functionResource = (model: object, hideElements: any = null, actions: any = null) => {
-    
-        return {
-            resource: model,
-            options: {
-              properties: {
-                ...hideElements,
+const generateResource = (Model: object, properties: any = {}, actions: any = {}) => {
+    return {
+        resource: Model,
+        options: {
+            properties: {
+                ...properties,
                 createdAt: {
-                  isVisible: {
-                    list: true, edit: false, create: false, show: true
-                  }
+                    isVisible: {
+                        list: true, edit: false, create: false, show: true
+                    }
                 },
                 updatedAt: {
-                  isVisible: {
-                    list: true, edit: false, create: false, show: true
-                  }
+                    isVisible: {
+                        list: true, edit: false, create: false, show: true
+                    }
                 }
-              },
-              actions: actions
+            },
+            actions: {
+                ...actions
             }
-          }
         }
+    }
+}
 
 const start = async () => {
+    const app = express()
+
     const adminOptions = {
         resources: [
-         
-            functionResource(Product),
-            functionResource(Category),
-            functionResource(
-                User,
-                {
-                    password: {
-                        type: 'password',
-                        isVisible: {
-                            list: false, edit: true, create: true, show: false
+            generateResource(Role),
+            generateResource(
+                    User, 
+                    {
+                        password: {
+                            type: 'password'
                         }
                     },
-                    active: {
-                        isVisible: {
-                            list: true, edit: false, create: false, show: true
-                        }
-                    },
-                    pin: {
-                        isVisible: {
-                            list: false, edit: false, create: false, show: false
-                        }
-                    }
-                },
-                {
-                    new: {
-                        before: async function(request: any){
-                            if(request.payload.password){
-                                request.payload.password = await bcrypt.hash(request.payload.password, 10)
-                            }
-                           
-                            return request;
-                        }
-                    },
-                    edit: {
-                        before: async function(request: any){
-                            if(request.payload.password){
-                                if(request.payload.password.indexOf('$2b$10') === -1 && request.payload.password.length < 40){
-                                    request.payload.password = await bcrypt.hash(request.payload.password, 10)
+                    {
+                        new: {
+                            before: async(request: any, context: any) => {
+                                if(request.payload.password){
+                                    request.payload.password = await bcrypt.hashSync(request.payload.password, 10);
                                 }
+                                return request;
+                            },
+                            after: async(originalResponse: any, request: any, context: any) => {
+                               
+                                console.log(originalResponse.record.params)
+                                return originalResponse;
                             }
-                            return request;
                         }
                     }
-                }
-            ),
+                  
+                ),
+            generateResource(Document)
         ],
-        rootPath: '/admin',
         dashboard: {
-            handle: async () => { },
-            component: AdminJS.bundle('./components/dashboard')
-          },
+            component: AdminJS.bundle('./components/DashboardComponent')
+        },
+        // rootPath: '/internal/admin',
         branding: {
-            logo: 'https://artpoin.com/wp-content/uploads/2020/02/Sem-t%C3%ADtulo-2.png' ,
             companyName: 'CandyShop',
-            favicon:'https://artpoin.com/wp-content/uploads/2020/02/Sem-t%C3%ADtulo-2.png'
+            logo: 'https://cdn-icons-png.flaticon.com/512/3465/3465221.png',
+            favicon: 'https://cdn-icons-png.flaticon.com/512/3465/3465221.png'
         }
-    };
-   
-  const app = express();
-  sequelize.sync()
-    .then((result) => console.log(''))
-    .catch((err) => console.log(err))
-
-  const admin = new AdminJS(adminOptions);
-
-  const sessionStore = new mysqlStore({
-    connectionLimit: 10,
-    password: process.env.DB_PASS,
-    user: process.env.DB_USER,
-    database: process.env.MYSQL_DB,
-    host: process.env.DB_HOST,
-    port: process.env.DB_PORT,
-    createDatabaseTable: true
-  });
-
-   const adminRouter = AdminJSExpress.buildAuthenticatedRouter(
-   admin,
-
-    {
-        authenticate: async function(email, password){
-            const user = await User.findOne({
-                where: {
-                    email: email
-                }
-            });
-            if(user){
-                const verifica = await bcrypt.compare(password, user.getDataValue('password'));
-                if(verifica){
-                    return user;
-                }
-            }
-            return false;
-        },
-        cookieName: 'adminjs',
-        cookiePassword: 'MfiklRA66ur7CHl0ESM8768JtdFUBkGR'
-    },
-    null,
-    {
-        store: sessionStore,
-        resave: true,
-        saveUninitialized: true,
-        secret: 'MfiklRA66ur7CHl0ESM8768JtdFUBkGR',
-        cookie: {
-            httpOnly: process.env.NODE_ENV === 'production',
-            secure: process.env.NODE_ENV === 'production'
-        },
-        name: 'adminjs', 
     }
-  );
 
+    const admin = new AdminJS(adminOptions)
+    const adminRouter = AdminJSExpress.buildAuthenticatedRouter(
+        admin, 
+        {
+            authenticate: async (email, password) => {
+                const userCtrl = new UserController()
+                return await userCtrl.login(email, password); 
+            },
+            cookieName: 'adminjs-internal-admin',
+            cookiePassword: '5E8vsHT1i4KXbn8hULxa8&^4xP^JR@7A'
+        },
+        null,
+        {
+            store: sessionStore,
+            resave: true,
+            saveUninitialized: true,
+            secret: 'B9z+!AH7k)UECV^7f!d)4^KV?CM}(.!.dSV+-cPCFJw2yN11I"v209O>k8KWkO}',
+            cookie:{
+                httpOnly: process.env.NOD_ENV !== 'production',
+                secure: process.env.NOD_ENV === 'production'
+            },
+            name: 'adminjs-internal-admin'
+        }
+    )
+   
 
-    app.use(express.json())
-    hbs.registerPartials(path.join(__dirname, 'views'))
-    app.set('view engine', 'hbs');
+    app.use(cors());
+    app.use(express.json());
+    hbs.registerPartials(path.join(ROOT_DIR, 'views'))
+    app.set('view engine', '.hbs')
+
     app.use(admin.options.rootPath, adminRouter)
-    
-    app.use(bodyParser.urlencoded({ extended: true }));
-    app.use("/auth", auth);
-  
+    app.use('/document', document)
+    app.use('/auth', auth)
+    app.use('/dashboard', dashboard)
+
+    app.get('/', (req, res) => {
+        res.send('Api is runnning')
+    })
     app.listen(PORT, () => {
-        console.log("Projeto rodando");
+        console.log(`AdminJS started on http://localhost:${PORT}${admin.options.rootPath}`)
     })
 }
 
-start();
+start()

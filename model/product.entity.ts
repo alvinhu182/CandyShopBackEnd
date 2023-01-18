@@ -1,4 +1,4 @@
-import sequelize from "../db";
+import { sequelizeDb as sequelize } from '../db';
 import { Optional, Model, DataTypes} from 'sequelize'
 interface IProduct {
     id: number,
